@@ -160,7 +160,7 @@ void Hash::hfsCalculation(std::vector<std::string> PlainStrings)
 std::vector<unsigned char> Hash::Symmetric()
 {
     std::string Key = aseFrame::KeyEntry->GetValue().ToStdString();
-    std::string CipherArray[4] = {"cbc", "ecb", "ctr"};
+    std::string CipherArray[3] = {"cbc", "ecb", "ctr"};
 
     int CipherIndex = aseFrame::CipherChoice->GetSelection();
     int KeySizes[3] = {16, 24, 32};
