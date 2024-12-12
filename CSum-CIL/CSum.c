@@ -53,6 +53,7 @@ char *Calculate(int* BlockSize, const unsigned char* Buffer, size_t BufferLength
             break;
         default:
             printf("Error: an unknown error. (And a super rare one.)");
+            return;
     }
 
     EVP_DigestUpdate(ctx, Buffer, BufferLength);
