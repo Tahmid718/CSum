@@ -10,6 +10,7 @@ class hfsFrame: public wxFrame
         static wxTextCtrl* InputHash;
 
         hfsFrame(const wxString& title, wxWindow* parent);
+
     private:
         wxCheckBox* SeperateString;
         wxTextCtrl* InputString;
