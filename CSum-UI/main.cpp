@@ -9,7 +9,7 @@
 #include <windows.h>
 
 /* VERSION */
-std::string version = "1.1";
+std::string version = "1.2";
 
 wxStatusBar* CSumFrame::StatusBar = nullptr;
 
