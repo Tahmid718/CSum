@@ -33,13 +33,11 @@ std::string CSumFrame::StrHash = "";
 CSumFrame::CSumFrame(const wxString& title, std::string ver)
     : wxFrame(nullptr, wxID_ANY, title)
 {    
-    SetMinSize(wxSize(905, 441));
-    SetMaxSize(wxSize(1280, 441));
+    SetMinSize(wxSize(905, 391));
+    SetMaxSize(wxSize(1280, 391));
     
     wxFont TitleFont(18, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Segoe UI");
     wxFont LabelFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Segoe UI"); 
-    wxFont ChoiceFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Segoe UI");
-    wxFont SmallFont(8, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Segoe UI");
 
     wxArrayString algorithms;
     algorithms.Add("MD5");
@@ -85,7 +83,6 @@ CSumFrame::CSumFrame(const wxString& title, std::string ver)
     CheckHashEntry->SetHint("Match");
 
     AlgorithmEntry = new wxChoice(panel, wxID_ANY, wxPoint(149, 30), wxSize(176, 28), algorithms);
-    AlgorithmEntry->SetFont(ChoiceFont);
     AlgorithmEntry->SetSelection(0);
 
     Bind(wxEVT_SIZE, &CSumFrame::OnResizing, this);
