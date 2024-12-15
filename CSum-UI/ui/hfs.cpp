@@ -19,7 +19,8 @@ hfsFrame::hfsFrame(const wxString& title, wxWindow* parent)
     wxArrayString Algorithmhfs;
     Algorithmhfs.Add("MD5");
     Algorithmhfs.Add("SHA1");
-    Algorithmhfs.Add("SHA2/SHA256");
+    Algorithmhfs.Add("SHA256");
+    Algorithmhfs.Add("SHA512");
 
     SeperateString = new wxCheckBox(panel, wxID_ANY, "Treat each line as different string.", wxPoint(45, 30), wxSize(400, -1));
 
@@ -60,11 +61,6 @@ void hfsFrame::hfsInstrument(wxCommandEvent& event)
     std::vector<std::string> strings;
     std::string input_ = InputString->GetValue().ToStdString();
     int AIndex = AlgorithmChoice->GetSelection();
-
-    if(AIndex > 2)
-    {
-        return;
-    }
 
     if (input_.length() == 0)
     {
