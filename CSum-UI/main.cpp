@@ -31,7 +31,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hInstancePrev, LPSTR lcmdline,
     // Since its referenced in calculate.cpp.
     CSumFrame::StatusBar = frame->CreateStatusBar(1);
 
-    frame->SetClientSize(905, 391);
+    frame->SetClientSize(905, 441);
 
     // Displaying the frame.
     frame->Show();
