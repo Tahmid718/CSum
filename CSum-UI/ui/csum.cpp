@@ -33,8 +33,8 @@ std::string CSumFrame::StrHash = "";
 CSumFrame::CSumFrame(const wxString& title, std::string ver)
     : wxFrame(nullptr, wxID_ANY, title)
 {    
-    SetMinSize(wxSize(905, 391));
-    SetMaxSize(wxSize(1280, 391));
+    SetMinSize(wxSize(905, 441));
+    SetMaxSize(wxSize(1280, 441));
     
     wxFont TitleFont(18, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Segoe UI");
     wxFont LabelFont(12, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Segoe UI"); 
