@@ -1,81 +1,324 @@
-#include "hfs.h"
-#include "../hash/calculate.h"
+#include "calculate.h"
+#include "../gui/csum_ui.h"
+#include "../gui/hfs.h"
+#include "../gui/ase.h"
 
+#include <wx/msgdlg.h>
+#include <openssl/evp.h>
+#include <openssl/rand.h>
+#include <iomanip>
+#include <fstream>
 #include <vector>
+#include <sstream>
+#include <ctime>
 
-Hash HashObject;
+std::vector<unsigned char> aseEncrypt(std::vector<unsigned char> Key, std::vector<unsigned char> IV, const EVP_CIPHER* CipherName);
+std::vector<unsigned char> aseDecrypt(std::vector<unsigned char> Key, std::vector<unsigned char> IV, const EVP_CIPHER* CipherName);
 
-wxChoice* hfsFrame::AlgorithmChoice = nullptr;
-wxTextCtrl* hfsFrame::InputHash = nullptr;
-
-hfsFrame::hfsFrame(const wxString& title, wxWindow* parent)
-    : wxFrame(parent, wxID_ANY, title, wxDefaultPosition, wxSize(800, 500), wxDEFAULT_FRAME_STYLE & ~(wxRESIZE_BORDER|wxMAXIMIZE_BOX))
+void Hash::CalculateHash()
 {
-    wxFont DefaultFont(10, wxFONTFAMILY_SWISS, wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL, false, "Segoe UI"); 
-    
-    wxPanel* panel = new wxPanel(this, wxID_ANY);
-    panel->SetFont(DefaultFont);
+    int AlgorithmIndex = CSumFrame::AlgorithmEntry->GetSelection();
 
-    wxArrayString Algorithmhfs;
-    Algorithmhfs.Add("MD5");
-    Algorithmhfs.Add("SHA1");
-    Algorithmhfs.Add("SHA256");
-    Algorithmhfs.Add("SHA512");
-
-    SeperateString = new wxCheckBox(panel, wxID_ANY, "Treat each line as different string.", wxPoint(45, 30), wxSize(400, -1));
-
-    AlgorithmChoice = new wxChoice(panel, wxID_ANY, wxPoint(570, 30), wxSize(110, 90), Algorithmhfs);
-    AlgorithmChoice->SetSelection(0);
-
-    InputString = new wxTextCtrl(panel, wxID_ANY, *wxEmptyString, wxPoint(45, 90), wxSize(700, 160), wxTE_MULTILINE);
-    InputString->Bind(wxEVT_TEXT, &hfsFrame::hfsInstrument, this);
-
-    InputHash = new wxTextCtrl(panel, wxID_ANY, *wxEmptyString, wxPoint(45, 280), wxSize(700, 160), wxTE_MULTILINE|wxTE_READONLY);
-}
-
-std::vector<std::string> splitlines(std::string& tofilter)
-{
-    std::vector<std::string>filtered;
-    size_t start = 0;
-    size_t length = tofilter.length();
-
-    for(size_t i=0; i<length; ++i)
+    if(AlgorithmIndex >= 0 && AlgorithmIndex <= 3)
     {
-        if(tofilter[i] == '\n')
+        CSumFrame::OpenFileButton->Disable();
+        CSumFrame::CalculateButton->Disable();
+
+        const std::string FilePath = CSumFrame::PathEntry->GetValue().ToStdString();
+
+        if(FilePath.length() == 0)
         {
-            filtered.push_back(tofilter.substr(start, i-start));
-            start = i+1;
+            wxMessageBox("Choose a file", "CSum Error", wxOK|wxICON_ERROR);
+            return;
         }
-    }
 
-    if(start < length)
-    {
-        filtered.push_back(tofilter.substr(start));
-    }
+        double start = time(0);
 
-    return filtered;
-}
+        CSumFrame::StatusBar->SetStatusText("Reading the file.");
 
-void hfsFrame::hfsInstrument(wxCommandEvent& event)
-{    
-    std::vector<std::string> strings;
-    std::string input_ = InputString->GetValue().ToStdString();
-    int AIndex = AlgorithmChoice->GetSelection();
+        std::ifstream File(FilePath, std::ios::binary);
 
-    if (input_.length() == 0)
-    {
-        InputHash->SetValue("");
-        return;
-    }
+        if(!File)
+        {
+            wxMessageBox("Couldn't open the given file", "CSum Error", wxOK|wxICON_ERROR);
+            return;
+        }
 
-    if(SeperateString->IsChecked())
-    {
-        strings = splitlines(input_);
+        File.seekg(0, std::ios::end);
+        std::streamsize Size = File.tellg();
+        File.seekg(0, std::ios::beg);
+
+        std::vector<char> BufferValues(Size);
+        if(!File.read(BufferValues.data(), Size))
+        {
+            wxMessageBox("Couldn't read the given file.", "CSum Error", wxOK|wxICON_ERROR);
+            return;
+        }
+
+        File.close();
+
+        CSumFrame::StatusBar->SetStatusText("Calculating hash.");
+
+        unsigned char Digest[64];
+        unsigned int DigestLen = 0;
+
+        EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+        switch(AlgorithmIndex)
+        {
+            case 0:
+                EVP_DigestInit_ex(ctx, EVP_md5(), nullptr);
+                break;
+            case 1:
+                EVP_DigestInit_ex(ctx, EVP_sha1(), nullptr);
+                break;
+            case 2:
+                EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr);
+                break;
+            case 3:
+                EVP_DigestInit_ex(ctx, EVP_sha512(), nullptr);
+                break;
+        }
+
+        EVP_DigestUpdate(
+            ctx,
+            reinterpret_cast<const unsigned char*>(BufferValues.data()),
+            BufferValues.size()
+        );
+        EVP_DigestFinal_ex(ctx, Digest, &DigestLen);
+        EVP_MD_CTX_free(ctx);
+
+        std::ostringstream hash;
+        for(int i=0; i<DigestLen; ++i)
+        {
+            hash << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(Digest[i]);
+        }
+
+        CSumFrame::StrHash = hash.str();
+
+        CSumFrame::HashEntry->SetValue(hash.str());
+        CSumFrame::OpenFileButton->Enable();
+        CSumFrame::CalculateButton->Enable();
+        CSumFrame::CopyButton->Enable();
+        CSumFrame::RecalculateButton->Enable();
+        CSumFrame::MatchButton->Enable();
+        CSumFrame::CheckHashEntry->SetEditable(true);
+
+        int difference = time(0)-start;
+
+        std::string Status;
+        Status = "Done!";
+
+        if(difference > 5)
+        {
+            Status += (" Time took ~" + std::to_string(difference) + " seconds.");
+        }
+
+        CSumFrame::StatusBar->SetStatusText(Status);
     }
     else
     {
-        strings.push_back(input_);
+        wxMessageBox("Choose an algorithm.", "CSum Error", wxOK|wxICON_ERROR);
     }
 
-    HashObject.hfsCalculation(strings);
+    return;
+}
+
+void Hash::hfsCalculation(std::vector<std::string> PlainStrings)
+{
+    std::string OutptHash = "";
+    
+    for(const std::string strs: PlainStrings)
+    {
+        int algorithmIndex = hfsFrame::AlgorithmChoice->GetSelection();
+        unsigned char Digest[64];
+        unsigned int Len = 0;
+
+        EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+
+        switch(algorithmIndex)
+        {
+            case 0:
+                EVP_DigestInit_ex(ctx, EVP_md5(), nullptr);
+                break;
+            case 1:
+                EVP_DigestInit_ex(ctx, EVP_sha1(), nullptr);
+                break;
+            case 2:
+                EVP_DigestInit_ex(ctx, EVP_sha256(), nullptr);
+                break;
+            case 3:
+                EVP_DigestInit_ex(ctx, EVP_sha512(), nullptr);
+                break;
+        }
+
+        EVP_DigestUpdate(ctx, strs.data(), strs.size());
+        EVP_DigestFinal_ex(ctx, Digest, &Len);
+        EVP_MD_CTX_free(ctx);
+
+        std::ostringstream Hash_;
+        for(int i=0; i<Len; ++i)
+        {
+            Hash_ << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(Digest[i]);
+        }
+
+        OutptHash += (Hash_.str() + "\n");
+    }
+
+    hfsFrame::InputHash->SetValue(OutptHash);
+}
+
+std::vector<unsigned char> Hash::Symmetric()
+{
+    std::string Key = aseFrame::KeyEntry->GetValue().ToStdString();
+    std::string CipherArray[4] = {"cbc", "ecb", "ctr"};
+
+    int CipherIndex = aseFrame::CipherChoice->GetSelection();
+    int KeySizes[3] = {16, 24, 32};
+    int KeySelectionIndex = aseFrame::KeySizeChoice->GetSelection();
+
+    std::string CipherName = "aes-" + std::to_string(KeySizes[KeySelectionIndex] * 8) + "-" + CipherArray[CipherIndex];
+    const EVP_CIPHER* Cipher = EVP_CIPHER_fetch(nullptr, CipherName.c_str(), nullptr);
+    if(!Cipher)
+    {
+        wxMessageBox("Invalid cipher mode " + CipherName + ".", "CSum | AES Symmetric Encryption", wxOK|wxICON_ERROR);
+        return {};
+    }
+
+    if(Key.length() != KeySizes[aseFrame::KeySizeChoice->GetSelection()])
+    {
+        wxMessageBox("Not a valid AES " + std::to_string(KeySizes[KeySelectionIndex] * 8) + " bits key", "CSum Error", wxOK|wxICON_ERROR);
+        return {};
+    }
+
+    std::vector<unsigned char> IV(EVP_CIPHER_get_iv_length(Cipher));
+    std::string IVstr = aseFrame::IvEntry->GetValue().ToStdString();
+
+    if (CipherArray[CipherIndex] == "ecb" && IVstr.length() > 0)
+    {
+        wxMessageBox("IV should be empty in ECB Cipher method.", "CSum | AES Symmetric Encryption", wxOK|wxICON_ERROR);
+        return {};
+    }
+
+    if (IVstr.length() == 16)
+    {
+        std::transform(IVstr.begin(), IVstr.end(), IV.begin(), [](char c){return static_cast<unsigned char>(c);});
+    }
+    else if (IVstr.length() == 0)
+    {
+        RAND_bytes(IV.data(), IV.size());
+    }
+    else
+    {
+        wxMessageBox("IV length should be 128 bits (or 16 ASCII characters).", "CSum | AES Symmetric Encryption", wxOK|wxICON_ERROR);
+        return {};
+    }
+
+    std::vector<unsigned char> AESKey(Key.begin(), Key.end());
+    std::vector<unsigned char> result;
+    std::ostringstream Hash_;
+
+    if(!aseFrame::PerformWhat->GetSelection())
+    {
+        result = aseEncrypt(AESKey, IV, Cipher);
+    }
+    else
+    {
+        result = aseDecrypt(AESKey, IV, Cipher);
+    }
+
+    if (result.size() == 0)
+    {
+        return {};
+    }
+
+    return result;
+}
+
+std::vector<unsigned char> aseEncrypt(std::vector<unsigned char> Key, std::vector<unsigned char> IV, const EVP_CIPHER* CipherName)
+{
+    std::string PlainTextStr = aseFrame::TextEntry->GetValue().ToStdString();
+    std::vector <unsigned char> PlainText(PlainTextStr.begin(), PlainTextStr.end());
+
+    int PlainTextLength = 0;
+    int CipherTextLength = 0;
+    
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+
+    if(!EVP_EncryptInit_ex(ctx, CipherName, nullptr, Key.data(), IV.data()))
+    {
+        EVP_CIPHER_CTX_free(ctx);
+        return {};
+    }
+
+    std::vector<unsigned char> CipherText(PlainText.size() + EVP_CIPHER_block_size(CipherName));
+
+    if(!EVP_EncryptUpdate(ctx, CipherText.data(), &PlainTextLength, PlainText.data(), PlainText.size()))
+    {
+        EVP_CIPHER_CTX_free(ctx);
+        return {};
+    }
+    
+    CipherTextLength = PlainTextLength;
+
+    if(!EVP_EncryptFinal_ex(ctx, CipherText.data() + PlainTextLength, &PlainTextLength))
+    {
+        EVP_CIPHER_CTX_free(ctx);
+        return {};
+    }
+
+    CipherText.resize(PlainTextLength+CipherTextLength);
+    EVP_CIPHER_CTX_free(ctx);
+
+    return CipherText;
+}
+
+std::vector<unsigned char> aseDecrypt(std::vector<unsigned char> Key, std::vector<unsigned char> IV, const EVP_CIPHER* CipherName)
+{
+    std::string CipherTextStr = aseFrame::TextEntry->GetValue().ToStdString();
+    std::vector<unsigned char> BinaryCipher;
+
+    if(CipherTextStr.length() % 2 != 0)
+    {
+        wxMessageBox("Not a valid AES Hexadecimal Cipher Text.", "CSum | AES Symmetric Encryption", wxOK|wxICON_ERROR);
+        return {};
+    }
+
+    BinaryCipher.reserve(CipherTextStr.length() / 2);
+    for(size_t i=0;i<CipherTextStr.length();i+=2)
+    {
+        unsigned char BinaryByte = static_cast<unsigned char>(std::stoi(CipherTextStr.substr(i, 2), nullptr, 16));
+        BinaryCipher.push_back(BinaryByte); 
+    }
+
+    EVP_CIPHER_CTX* ctx = EVP_CIPHER_CTX_new();
+    int PlainTextLength = 0, TotalPlainTextLength = 0;
+
+    if(!EVP_DecryptInit_ex(ctx, CipherName, nullptr, Key.data(), IV.data()))
+    {
+        EVP_CIPHER_CTX_free(ctx);
+        return {};
+    }
+
+    std::vector<unsigned char> PlainText(CipherTextStr.size() + EVP_CIPHER_block_size(CipherName));
+
+    if(!EVP_DecryptUpdate(ctx, PlainText.data(), &PlainTextLength, BinaryCipher.data(), BinaryCipher.size()))
+    {
+        EVP_CIPHER_CTX_free(ctx);
+        return {};
+    }
+
+    TotalPlainTextLength += PlainTextLength;
+
+    if(!EVP_DecryptFinal_ex(ctx, PlainText.data() + TotalPlainTextLength, &PlainTextLength))
+    {
+        EVP_CIPHER_CTX_free(ctx);
+        return {};
+    }
+
+    TotalPlainTextLength += PlainTextLength;
+
+    PlainText.resize(TotalPlainTextLength);
+    EVP_CIPHER_CTX_free(ctx);
+
+    return PlainText;
 }
